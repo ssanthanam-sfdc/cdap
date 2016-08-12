@@ -55,6 +55,7 @@ public class HBaseVersion {
     HBASE_10_CDH55("1.0-cdh5.5"),
     HBASE_10_CDH56("1.0-cdh5.6"),
     HBASE_11("1.1"),
+    HBASE_12("1.2"),
     HBASE_12_CDH57("1.2-cdh5.7"),
     UNKNOWN("unknown");
 
@@ -103,7 +104,7 @@ public class HBaseVersion {
             ver.getClassifier().startsWith(CDH58_CLASSIFIER))) {
           currentVersion = Version.HBASE_12_CDH57;
         } else {
-          currentVersion = Version.UNKNOWN;
+          currentVersion = Version.HBASE_12;
         }
       } else {
         currentVersion = Version.UNKNOWN;
