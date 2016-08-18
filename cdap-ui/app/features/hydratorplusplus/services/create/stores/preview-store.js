@@ -19,7 +19,7 @@ let getInitialState = () => {
   return {
     isPreviewModeEnabled: false,
     startTime: null,
-    previewId: '96072a8a-6506-11e6-9ea5-d298139d8eab'
+    previewId: null
   };
 };
 
