@@ -58,6 +58,12 @@ angular.module(PKG.name + '.feature.hydratorplusplus')
             controller: 'HydratorPlusPlusNodeConfigCtrl',
             controllerAs: 'HydratorPlusPlusNodeConfigCtrl',
             resolve: {
+              rIsPreviewMode: function () {
+                return false;
+              },
+              risStudioMode: function () {
+                return false;
+              },
               rDisabled: function() {
                 return true;
               },
