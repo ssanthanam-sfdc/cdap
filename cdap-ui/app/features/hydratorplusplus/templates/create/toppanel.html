@@ -67,7 +67,15 @@
     </div>
   </div>
 
-  <div class="btn-group action-buttons">
+  <div class="btn-group action-buttons"
+       ng-if="!HydratorPlusPlusTopPanelCtrl.previewMode">
+    <div class="btn"
+         ng-click="HydratorPlusPlusTopPanelCtrl.togglePreviewMode()"
+         uib-tooltip="Preview"
+         tooltip-placement="bottom"
+         tooltip-class="toppanel-tooltip">
+      <span class="fa icon-eye"></span>
+    </div>
     <div class="btn"
          ng-click="HydratorPlusPlusTopPanelCtrl.showSettings()"
          uib-tooltip="Settings"
@@ -103,6 +111,25 @@
          tooltip-placement="bottom"
          tooltip-class="toppanel-tooltip">
       <span class="fa icon-publish"></span>
+    </div>
+  </div>
+
+  <!-- PREVIEW MODE BUTTONS -->
+  <div class="btn-group action-buttons"
+     ng-if="HydratorPlusPlusTopPanelCtrl.previewMode">
+  <div class="btn active"
+       ng-click="HydratorPlusPlusTopPanelCtrl.togglePreviewMode()">
+    <span class="fa fa-eye"></span>
+  </div>
+  <div class="btn"
+       ng-click="HydratorPlusPlusTopPanelCtrl.runPreview()">
+    <span class="fa fa-play"></span>
+  </div>
+  <div class="btn run-time">
+    <span ng-if="!HydratorPlusPlusTopPanelCtrl.previewStartTime">00:00</span>
+    <span ng-if="HydratorPlusPlusTopPanelCtrl.previewStartTime">
+      {{ HydratorPlusPlusTopPanelCtrl.displayDuration.minutes }}:{{ HydratorPlusPlusTopPanelCtrl.displayDuration.seconds }}
+      </span>
     </div>
   </div>
 
