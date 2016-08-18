@@ -126,7 +126,5 @@ class HydratorPlusPlusCreateCanvasCtrl {
   }
 }
 
-
-HydratorPlusPlusCreateCanvasCtrl.$inject = ['DAGPlusPlusNodesStore', 'HydratorPlusPlusConfigStore', 'HydratorPlusPlusHydratorService', '$uibModal', 'GLOBALS', 'DAGPlusPlusNodesActionsFactory', 'HydratorPlusPlusPreviewStore'];
 angular.module(PKG.name + '.feature.hydratorplusplus')
   .controller('HydratorPlusPlusCreateCanvasCtrl', HydratorPlusPlusCreateCanvasCtrl);
