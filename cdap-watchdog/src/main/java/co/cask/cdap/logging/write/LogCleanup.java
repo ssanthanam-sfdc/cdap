@@ -28,6 +28,7 @@ import co.cask.cdap.common.security.Impersonator;
 import co.cask.cdap.logging.context.LoggingContextHelper;
 import co.cask.cdap.proto.NamespaceMeta;
 import co.cask.cdap.proto.id.NamespaceId;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;
@@ -128,8 +129,9 @@ public final class LogCleanup implements Runnable {
    * @param parentDirs parent directories for deleted files
    * @throws Exception
    */
-  private void cleanFilesWithoutMeta(final long tillTime, final Map<String, NamespaceId> namespacedLogBaseDirMap,
-                                     final SetMultimap<String, Location> parentDirs) throws Exception {
+  @VisibleForTesting
+  void cleanFilesWithoutMeta(final long tillTime, final Map<String, NamespaceId> namespacedLogBaseDirMap,
+                             final SetMultimap<String, Location> parentDirs) throws Exception {
     LOG.info("Starting deletion of log files older than {} without metadata", tillTime);
     List<NamespaceMeta> namespaceMetaList = namespaceQueryAdmin.list();
     for (NamespaceMeta namespaceMeta : namespaceMetaList) {
@@ -139,23 +141,30 @@ public final class LogCleanup implements Runnable {
                                                                                               impersonator);
       if (namespacedLogBaseDir.exists()) {
         final Processor<LocationStatus, Set<Location>> processor = getLocationProcessor(namespaceId, tillTime);
-        impersonator.doAs(namespaceId, new Callable<Void>() {
-          @Override
-          public Void call() throws Exception {
-            Locations.processLocations(namespacedLogBaseDir, true, processor);
-            return null;
-          }
-        });
-        Set<Location> result = processor.getResult();
+        try {
+          impersonator.doAs(namespaceId, new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+              Locations.processLocations(namespacedLogBaseDir, true, processor);
+              return null;
+            }
+          });
+        } catch (Exception e) {
+          LOG.warn("Got exception when deleting path {}", namespacedLogBaseDir, e);
+        }
+        Set<Location> namespaceLogFiles = processor.getResult();
 
         LoggingContext loggingContext = new LogNamespaceLoggingContext(namespaceId.getNamespace());
         String nextRowKey = loggingContext.getLogPartition();
         do {
           Processor<Location, Set<Location>> scanProcessor = getScannedFilesProcessor();
           nextRowKey = fileMetaDataManager.scanFiles(nextRowKey, tillTime, scanProcessor);
-          scanProcessor = getScannedFilesProcessor();
-          for (final Location location : Sets.difference(result, scanProcessor.getResult())) {
-            deleteLogFiles(parentDirs, namespaceId, namespacedLogBaseDir.toString(), location);
+          for (final Location locationToDelete : Sets.difference(namespaceLogFiles, scanProcessor.getResult())) {
+            try {
+              deleteLogFiles(parentDirs, namespaceId, namespacedLogBaseDir.toString(), locationToDelete);
+            } catch (Exception e) {
+              LOG.warn("Got exception when deleting path {}", locationToDelete, e);
+            }
             namespacedLogBaseDirMap.put(namespacedLogBaseDir.toString(), namespaceId);
           }
         } while (nextRowKey != null);
