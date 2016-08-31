@@ -122,14 +122,7 @@ cdap_home() {
   fi
   local readonly __script=${BASH_SOURCE[0]}
   local readonly __script_bin=$(cd $(dirname ${__script}); pwd -P)
-  local readonly __comp_home=${__script%/*/*}
-  if [[ ${__comp_home%/*} == /opt/cdap ]]; then
-    __app_home=${__comp_home}
-    __cdap_home=/opt/cdap
-  else
-    __app_home=$(dirname ${__script_bin})
-    __cdap_home=${__app_home}
-  fi
+  local readonly __cdap_home=$(dirname ${__script_bin})
   echo ${__cdap_home}
 }
 
@@ -360,13 +353,13 @@ cdap_set_hbase() {
   local readonly __compat __class=co.cask.cdap.data2.util.hbase.HBaseVersion
   HBASE_VERSION=${HBASE_VERSION:-$("${JAVA}" -cp ${CLASSPATH} ${__class} 2>/dev/null)}
   case ${HBASE_VERSION} in
-    0.96*) __compat="${CDAP_HOME}"/hbase-compat-0.96/lib/* ;;
-    0.98*) __compat="${CDAP_HOME}"/hbase-compat-0.98/lib/* ;;
-    1.0-cdh5.5*|1.0-cdh5.6*) __compat="${CDAP_HOME}"/hbase-compat-1.0-cdh5.5.0/lib/* ;; # 5.5 and 5.6 are compatible
-    1.0-cdh*) __compat="${CDAP_HOME}"/hbase-compat-1.0-cdh/lib/* ;;
-    1.0*) __compat="${CDAP_HOME}"/hbase-compat-1.0/lib/* ;;
-    1.1*) __compat="${CDAP_HOME}"/hbase-compat-1.1/lib/* ;;
-    1.2-cdh*) __compat="${CDAP_HOME}"/hbase-compat-1.2-cdh5.7.0/lib/* ;; # 5.7 and 5.8 are compatible
+    0.96*) __compat="${CDAP_HOME}"/lib/hbase-compat-0.96/* ;;
+    0.98*) __compat="${CDAP_HOME}"/lib/hbase-compat-0.98/* ;;
+    1.0-cdh5.5*|1.0-cdh5.6*) __compat="${CDAP_HOME}"/lib/hbase-compat-1.0-cdh5.5.0/* ;; # 5.5 and 5.6 are compatible
+    1.0-cdh*) __compat="${CDAP_HOME}"/lib/hbase-compat-1.0-cdh/* ;;
+    1.0*) __compat="${CDAP_HOME}"/lib/hbase-compat-1.0/* ;;
+    1.1*) __compat="${CDAP_HOME}"/lib/hbase-compat-1.1/* ;;
+    1.2-cdh*) __compat="${CDAP_HOME}"/lib/hbase-compat-1.2-cdh5.7.0/* ;; # 5.7 and 5.8 are compatible
     "") die "Unable to determine HBase version! Aborting." ;;
     *) die "Unknown/Unsupported HBase version found: ${HBASE_VERSION}" ;;
   esac
@@ -487,12 +480,6 @@ cdap_service() {
   # awk taken from http://stackoverflow.com/a/1541178
   local __name=$(echo ${__service/-/ } | awk '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2) }}1')
 
-  case ${__service} in
-    auth-server) local readonly __comp_home="security" ;;
-    kafka-server) local readonly __comp_home=${__svc} ;;
-    router) local readonly __comp_home="gateway" ;;
-    *) local readonly __comp_home=${__service} ;;
-  esac
   [[ ${__service} == ui ]] && __name="UI"
 
   cdap_create_log_dir
@@ -513,7 +500,7 @@ cdap_service() {
       __ret=${?}
       ;;
     classpath)
-      cdap_set_classpath "${CDAP_HOME}"/${__comp_home} "${CDAP_CONF}"
+      cdap_set_classpath "${CDAP_HOME}" "${CDAP_CONF}"
       [[ ${__service} == master ]] && cdap_set_java && cdap_set_hbase
       echo ${CLASSPATH}
       __ret=0
@@ -558,7 +545,7 @@ cdap_start_java() {
   # Check and set classpath if in development environment. 
   cdap_check_and_set_classpath_for_dev_environment "${CDAP_HOME}"
   # Setup classpaths.
-  cdap_set_classpath "${CDAP_HOME}"/${__comp_home} "${CDAP_CONF}"
+  cdap_set_classpath "${CDAP_HOME}" "${CDAP_CONF}"
   # Setup Java
   cdap_set_java || return 1
   # Set JAVA_HEAPMAX from variable defined in JAVA_HEAP_VAR, unless defined already
@@ -856,10 +843,10 @@ cdap_router() {
 cdap_ui() {
   local MAIN_CMD=node
   # Check for embedded node binary, and ensure it's the correct binary ABI for this system
-  if test -x ${CDAP_HOME}/ui/bin/node ; then
-    ${CDAP_HOME}/ui/bin/node --version >/dev/null 2>&1
+  if test -x ${CDAP_HOME}/bin/node ; then
+    ${CDAP_HOME}/bin/node --version >/dev/null 2>&1
     if [ $? -eq 0 ] ; then
-      MAIN_CMD=${CDAP_HOME}/ui/bin/node
+      MAIN_CMD=${CDAP_HOME}/bin/node
     elif [[ $(which node 2>/dev/null) ]]; then
       MAIN_CMD=node
     else
@@ -877,17 +864,11 @@ cdap_ui() {
 # Runs CDAP CLI with the given options, or starts an interactive shell
 #
 cdap_cli() {
-  local readonly __path __libexec __lib __script="$(basename ${0}):cdap_cli"
+  local readonly __script="$(basename ${0}):cdap_cli"
   local readonly __class="co.cask.cdap.cli.CLIMain"
   cdap_set_java || die "Unable to locate JAVA or JAVA_HOME"
-  __path=$(cdap_home)
-  if [[ -d ${__path}/cli/libexec ]]; then
-    __libexec=${__path}/cli/libexec
-    __lib=${__path}/cli/lib
-  else
-    __libexec=${__path}/libexec
-    __lib=${__path}/lib
-  fi
+  local readonly __path=$(cdap_home)
+  local readonly __libexec=${__path}/libexec __lib=${__path}/lib
   CLI_CP=${__libexec}/co.cask.cdap.cdap-cli-@@project.version@@.jar
   CLI_CP+=:${__lib}/co.cask.cdap.cdap-cli-@@project.version@@.jar
   if [[ ${CLASSPATH} == '' ]]; then
@@ -907,18 +888,12 @@ cdap_cli() {
 # cdap_config_tool [arguments]
 #
 cdap_config_tool() {
-  local readonly __path __libexec __lib __script="$(basename ${0}):cdap_config_tool"
+  local readonly __script="$(basename ${0}):cdap_config_tool"
   local readonly __authfile="${HOME}"/.cdap.accesstoken
   local readonly __ret __class=co.cask.cdap.ui.ConfigurationJsonTool
   cdap_set_java || die "Unable to locate JAVA or JAVA_HOME"
-  __path=$(cdap_home)
-  if [[ -d ${__path}/ui/lib ]]; then
-    __libexec=${__path}/ui/libexec
-    __lib=${__path}/ui/lib
-  else
-    __libexec=${__path}/libexec
-    __lib=${__path}/lib
-  fi
+  local readonly __path=$(cdap_home)
+  local readonly __libexec=${__path}/libexec __lib=${__path}/lib
   if [[ ${CLASSPATH} == "" ]]; then
     CLASSPATH=${__lib}/*
   else
@@ -1006,18 +981,12 @@ cdap_sdk() {
 
 # cdap_tx_debugger
 cdap_tx_debugger() {
-  local readonly __path __libexec __lib __script="$(basename ${0}):cdap_tx_debugger"
+  local readonly __script="$(basename ${0}):cdap_tx_debugger"
   local readonly __authfile="${HOME}"/.cdap.accesstoken
   local readonly __ret __class=co.cask.cdap.data2.transaction.TransactionManagerDebuggerMain
   cdap_set_java || die "Unable to locate JAVA or JAVA_HOME"
-  __path=$(cdap_home)
-  if [[ -d ${__path}/master/libexec ]]; then
-    __libexec=${__path}/master/libexec
-    __lib=${__path}/master/lib
-  else
-    __libexec=${__path}/libexec
-    __lib=${__path}/lib
-  fi
+  local readonly __path=$(cdap_home)
+  local readonly __libexec=${__path}/libexec __lib=${__path}/lib
   if [[ ${CLASSPATH} == "" ]]; then
     CLASSPATH=${__lib}/*
   else
@@ -1049,7 +1018,7 @@ cdap_tx_debugger() {
 CDAP_NODE_VERSION_MINIMUM=${CDAP_NODE_VERSION_MINIMUM:-v0.10.36}
 
 # Specifies CDAP UI Path
-CDAP_UI_PATH=${CDAP_UI_PATH:-ui/server.js}
+CDAP_UI_PATH=${CDAP_UI_PATH:-server.js}
 
 # Default CDAP_CONF to /etc/cdap/conf (package default)
 export CDAP_CONF=${CDAP_CONF:-/etc/cdap/conf}
