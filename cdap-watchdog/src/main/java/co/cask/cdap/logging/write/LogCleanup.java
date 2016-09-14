@@ -127,85 +127,110 @@ public final class LogCleanup implements Runnable {
    * @param tillTime time till the meta data will be deleted.
    * @param namespacedLogBaseDirMap namespace to directory map
    * @param parentDirs parent directories for deleted files
-   * @throws Exception
    */
   @VisibleForTesting
   void cleanFilesWithoutMeta(final long tillTime, final Map<String, NamespaceId> namespacedLogBaseDirMap,
                              final SetMultimap<String, Location> parentDirs) throws Exception {
     LOG.info("Starting deletion of log files older than {} without metadata", tillTime);
-    List<NamespaceMeta> namespaceMetaList = namespaceQueryAdmin.list();
-    for (NamespaceMeta namespaceMeta : namespaceMetaList) {
+    List<NamespaceMeta> namespaces = namespaceQueryAdmin.list();
+    // For all the namespaces present in NamespaceMeta, gather log files from disk and log meta. Then delete the log
+    // files for which metadata is not present
+    for (NamespaceMeta namespaceMeta : namespaces) {
       final NamespaceId namespaceId = namespaceMeta.getNamespaceId();
       final Location namespacedLogBaseDir = LoggingContextHelper.getNamespacedBaseDirLocation(namespacedLocationFactory,
                                                                                               logBaseDir, namespaceId,
                                                                                               impersonator);
+      // processor to get list of log files older than retention duration
+      final Processor<LocationStatus, Set<Location>> diskFilesProcessor = getDiskFilesProcessor(namespaceId, tillTime);
+      // gather all the disk log files older than tillTime for a given namespace
       if (namespacedLogBaseDir.exists()) {
-        final Processor<LocationStatus, Set<Location>> processor = getLocationProcessor(namespaceId, tillTime);
         try {
           impersonator.doAs(namespaceId, new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-              Locations.processLocations(namespacedLogBaseDir, true, processor);
+              Locations.processLocations(namespacedLogBaseDir, true, diskFilesProcessor);
               return null;
             }
           });
         } catch (Exception e) {
-          LOG.warn("Got exception when deleting path {}", namespacedLogBaseDir, e);
+          LOG.warn("Got exception while accessing path {}", namespacedLogBaseDir, e);
         }
-        Set<Location> namespaceLogFiles = processor.getResult();
+        Set<Location> diskFileLocations = diskFilesProcessor.getResult();
 
+        // get the logging context for a given namespace
         LoggingContext loggingContext = new LogNamespaceLoggingContext(namespaceId.getNamespace());
-        String nextRowKey = loggingContext.getLogPartition();
+
+        // get all the log meta files for a given namespace
+        FileMetaDataManager.TableKey nextTableKey = new FileMetaDataManager.TableKey(loggingContext.getLogPartition(),
+                                                                                     null);
+        Processor<URI, Set<URI>> metaProcessor = getMetaFilesProcessor();
+        // Get all the log metadata in batches of 100
         do {
-          Processor<Location, Set<Location>> scanProcessor = getScannedFilesProcessor();
-          nextRowKey = fileMetaDataManager.scanFiles(nextRowKey, tillTime, scanProcessor);
-          for (final Location locationToDelete : Sets.difference(namespaceLogFiles, scanProcessor.getResult())) {
-            try {
-              deleteLogFiles(parentDirs, namespaceId, namespacedLogBaseDir.toString(), locationToDelete);
-            } catch (Exception e) {
-              LOG.warn("Got exception when deleting path {}", locationToDelete, e);
+          nextTableKey = fileMetaDataManager.scanFiles(nextTableKey, 100, metaProcessor);
+        } while (nextTableKey != null);
+
+        // create location from scanned uris and keep track of all the metadata files modified before tillTime
+        final Set<Location> metaLocations = new HashSet<>();
+        for (final URI uri : metaProcessor.getResult()) {
+          impersonator.doAs(namespaceId, new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+              Location fileLocation = rootLocationFactory.create(uri);
+              if (fileLocation.lastModified() < tillTime) {
+                metaLocations.add(fileLocation);
+              }
+              return null;
             }
-            namespacedLogBaseDirMap.put(namespacedLogBaseDir.toString(), namespaceId);
+          });
+        }
+
+        Sets.SetView<Location> difference = Sets.difference(diskFileLocations, metaLocations);
+        // delete all the disk locations for which metadata is not present
+        for (final Location locationToDelete : difference) {
+          try {
+            deleteLogFiles(parentDirs, namespaceId, namespacedLogBaseDir.toString(), locationToDelete);
+          } catch (Exception e) {
+            LOG.warn("Got exception when deleting path {}", locationToDelete, e);
           }
-        } while (nextRowKey != null);
+          namespacedLogBaseDirMap.put(namespacedLogBaseDir.toString(), namespaceId);
+        }
       }
     }
   }
 
-  private Processor<Location, Set<Location>> getScannedFilesProcessor() {
-    return new Processor<Location, Set<Location>>() {
-      private Set<Location> locations = new HashSet<>();
+  private Processor<URI, Set<URI>> getMetaFilesProcessor() {
+    return new Processor<URI, Set<URI>>() {
+      private Set<URI> locations = new HashSet<>();
 
       @Override
-      public boolean process(final Location input) {
-        locations.add(input);
+      public boolean process(final URI inputUri) {
+        locations.add(inputUri);
         return true;
       }
 
       @Override
-      public Set<Location> getResult() {
+      public Set<URI> getResult() {
         return locations;
       }
     };
   }
 
   /**
-   * Logging context for namespace
+   * Logging context for a namespace
    */
-  public class LogNamespaceLoggingContext extends NamespaceLoggingContext {
+  private class LogNamespaceLoggingContext extends NamespaceLoggingContext {
     /**
      * Constructs NamespaceLoggingContext.
      *
      * @param namespaceId namespace id
      */
-    public LogNamespaceLoggingContext(String namespaceId) {
+    private LogNamespaceLoggingContext(String namespaceId) {
       super(namespaceId);
     }
   }
 
-  private Processor<LocationStatus, Set<Location>> getLocationProcessor(final NamespaceId namespaceId,
-                                                                        final long tillTime) {
-    // get list of log files older than retention duration
+  private Processor<LocationStatus, Set<Location>> getDiskFilesProcessor(final NamespaceId namespaceId,
+                                                                         final long tillTime) {
     return new Processor<LocationStatus, Set<Location>>() {
       private Set<Location> locations = new HashSet<>();
 

@@ -39,7 +39,6 @@ import org.apache.twill.filesystem.Location;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -69,12 +68,6 @@ public final class LoggingContextHelper {
     .build();
 
   private LoggingContextHelper() {}
-
-  public static String getNamespacedBaseDir(NamespacedLocationFactory namespacedLocationFactory, String logBaseDir,
-                                            NamespaceId namespaceId) throws IOException {
-    Preconditions.checkArgument(logBaseDir != null, "Log Base dir cannot be null");
-    return namespacedLocationFactory.get(namespaceId.toId()).append(logBaseDir).toString();
-  }
 
   public static Location getNamespacedBaseDirLocation(final NamespacedLocationFactory namespacedLocationFactory,
                                                       final String logBaseDir, final NamespaceId namespaceId,

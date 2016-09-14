@@ -40,7 +40,6 @@ import com.google.common.collect.RowSortedTable;
 import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.inject.Inject;
 import org.apache.twill.common.Threads;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,7 +78,6 @@ public class KafkaLogWriterPlugin extends AbstractKafkaLogProcessor {
   private CountDownLatch countDownLatch;
   private int partition;
 
-  @Inject
   KafkaLogWriterPlugin(CConfiguration cConf, FileMetaDataManager fileMetaDataManager,
                        CheckpointManagerFactory checkpointManagerFactory, RootLocationFactory rootLocationFactory,
                        NamespaceQueryAdmin namespaceQueryAdmin, NamespacedLocationFactory namespacedLocationFactory,

@@ -156,59 +156,89 @@ public final class FileMetaDataManager {
 
   /**
    * Scans meta data and gathers all the files older than tillTime
-   * @param startRowKey start key for scan
-   * @param tillTime time till the meta data will be deleted.
+   *
+   * @param startTableKey row key for the scan and column from where scan will be started
+   * @param limit batch size for number of columns to be read
    * @param processor processor to process files
-   * @return next row key, returns null if end of table
+   * @return next row key + start column for next iteration, returns null if end of table
    */
   @Nullable
-  public String scanFiles(final String startRowKey, final long tillTime,
-                          final Processor<Location, Set<Location>> processor) {
-    return execute(new TransactionExecutor.Function<Table, String>() {
+  public TableKey scanFiles(final TableKey startTableKey, final int limit,
+                            final Processor<URI, Set<URI>> processor) {
+    return execute(new TransactionExecutor.Function<Table, TableKey>() {
       @Override
-      public String apply(Table table) throws Exception {
-        byte[] startKey = getRowKey(startRowKey);
+      public TableKey apply(Table table) throws Exception {
+        byte[] startKey = getRowKey(startTableKey.getRowKey());
         byte[] stopKey = Bytes.stopKeyForPrefix(startKey);
 
         try (Scanner scanner = table.scan(startKey, stopKey)) {
           Row row;
-          long fileCount = 0;
+          int colCount = 0;
+          boolean hasMoreCols = false;
+          boolean firstTime = true;
+
           while ((row = scanner.next()) != null) {
             // Get the next logging context
             byte[] rowKey = row.getRow();
+            byte[] stopCol = null;
 
-            // if the previous logging context has some files to handle then return
-            if (fileCount > 0) {
-              return getLogPartition(rowKey);
-            }
-
-            final NamespaceId namespaceId = getNamespaceId(rowKey);
-            // Go thorough files for a logging context
+            // Go through files for a logging context
             for (final Map.Entry<byte[], byte[]> entry : row.getColumns().entrySet()) {
               byte[] colName = entry.getKey();
-              URI file = new URI(Bytes.toString(entry.getValue()));
-              if (LOG.isDebugEnabled()) {
-                LOG.debug("Got file {} with start time {}", file, Bytes.toLong(colName));
+              byte[] colValue = entry.getValue();
+
+              // while processing a row key, if start column is present, then it should be considered only for the
+              // first time. Skip any column less/equal to start column
+              if (firstTime && startTableKey.getStartColumn() != null &&
+                startTableKey.getStartColumn().compareTo(Bytes.toLong(colName)) >= 0) {
+                continue;
               }
 
-              Location fileLocation = impersonator.doAs(namespaceId, new Callable<Location>() {
-                @Override
-                public Location call() throws Exception {
-                  return rootLocationFactory.create(new URI(Bytes.toString(entry.getValue())));
-                }
-              });
-              if (fileLocation.lastModified() < tillTime) {
-                ++fileCount;
-                processor.process(fileLocation);
-              } else {
+              // Stop if we exceeded the limit
+              if (colCount >= limit) {
+                hasMoreCols = true;
                 break;
               }
+
+              stopCol = colName;
+              colCount++;
+              processor.process(new URI(Bytes.toString(colValue)));
             }
+
+            // If any more columns remaining for the row key being processed, then return current row key
+            if (hasMoreCols) {
+              if (stopCol != null) {
+                return new TableKey(getLogPartition(rowKey), Bytes.toLong(stopCol));
+              }
+              return new TableKey(getLogPartition(rowKey), null);
+            }
+            firstTime = false;
           }
         }
         return null;
       }
     });
+  }
+
+  /**
+   * Class which holds table key (row key + column) for log meta
+   */
+  public static final class TableKey {
+    private final String rowKey;
+    private final Long startColumn;
+
+    public TableKey(String rowKey, @Nullable Long startColumn) {
+      this.rowKey = rowKey;
+      this.startColumn = startColumn;
+    }
+
+    public String getRowKey() {
+      return rowKey;
+    }
+
+    public Long getStartColumn() {
+      return startColumn;
+    }
   }
 
   /**
@@ -230,8 +260,9 @@ public final class FileMetaDataManager {
             String namespacedLogDir = impersonator.doAs(namespaceId, new Callable<String>() {
               @Override
               public String call() throws Exception {
-                return LoggingContextHelper.getNamespacedBaseDir(namespacedLocationFactory, logBaseDir,
-                                                                 namespaceId);
+                return LoggingContextHelper.getNamespacedBaseDirLocation(namespacedLocationFactory,
+                                                                         logBaseDir, namespaceId,
+                                                                         impersonator).toString();
               }
             });
 

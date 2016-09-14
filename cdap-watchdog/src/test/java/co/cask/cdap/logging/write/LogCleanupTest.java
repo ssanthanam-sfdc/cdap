@@ -450,14 +450,14 @@ public class LogCleanupTest {
     LOG.info("# of files to delete: {}", withMetaFiles.size());
 
     int counter = 0;
-    Iterator<Location> toDeleteIterator = withMetaFiles.iterator();
+    Iterator<Location> withMetaIterator = withMetaFiles.iterator();
     Iterator<Location> noMetaFilesIterator = noMetaFiles.iterator();
 
-    while (toDeleteIterator.hasNext() || noMetaFilesIterator.hasNext()) {
-      Location location = toDeleteIterator.hasNext() ? toDeleteIterator.next() : noMetaFilesIterator.next();
+    while (withMetaIterator.hasNext() || noMetaFilesIterator.hasNext()) {
+      Location location = withMetaIterator.hasNext() ? withMetaIterator.next() : noMetaFilesIterator.next();
       long modTime = deletionBoundary - counter - 10000;
       Location file = createFile(location, modTime);
-      if (!noMetaFiles.contains(location)) {
+      if (withMetaFiles.contains(location)) {
         fileMetaDataManager.writeMetaData(dummyContext, modTime, file);
       }
       counter++;
