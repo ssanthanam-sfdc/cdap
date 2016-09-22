@@ -28,6 +28,7 @@ import co.cask.cdap.internal.schedule.TimeSchedule;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.ScheduledRuntime;
+import co.cask.cdap.proto.id.ScheduleId;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -253,7 +254,8 @@ public abstract class AbstractSchedulerService extends AbstractIdleService imple
 
     Map<String, ScheduleSpecification> schedules = appSpec.getSchedules();
     if (schedules == null || !schedules.containsKey(scheduleName)) {
-      throw new ScheduleNotFoundException(Id.Schedule.from(program.getApplication(), scheduleName));
+      throw new ScheduleNotFoundException(new ScheduleId(program.getNamespaceId(), program.getApplicationId(),
+                                                         scheduleName));
     }
 
     ScheduleSpecification scheduleSpec = schedules.get(scheduleName);

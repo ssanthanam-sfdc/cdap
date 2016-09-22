@@ -48,6 +48,7 @@ import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramStatus;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.RunRecord;
+import co.cask.cdap.proto.id.ApplicationId;
 import co.cask.cdap.proto.id.EntityId;
 import co.cask.cdap.proto.id.Ids;
 import co.cask.cdap.proto.id.NamespaceId;
@@ -162,9 +163,10 @@ public class ProgramLifecycleService extends AbstractIdleService {
    */
   public ProgramStatus getProgramStatus(ProgramId programId) throws Exception {
     // check that app exists
-    ApplicationSpecification appSpec = store.getApplication(programId.getParent());
+    ApplicationId appId = programId.getParent();
+    ApplicationSpecification appSpec = store.getApplication(appId);
     if (appSpec == null) {
-      throw new NotFoundException(Ids.namespace(programId.getNamespace()).app(programId.getApplication()).toId());
+      throw new NotFoundException(appId);
     }
 
     ProgramRuntimeService.RuntimeInfo runtimeInfo = findRuntimeInfo(programId);
@@ -186,6 +188,7 @@ public class ProgramLifecycleService extends AbstractIdleService {
         }
         return ProgramStatus.STOPPED;
       }
+      throw new IllegalStateException("Webapp status is not supported");
     }
 
     return runtimeInfo.getController().getState().getProgramStatus();
@@ -413,7 +416,7 @@ public class ProgramLifecycleService extends AbstractIdleService {
       if (!store.applicationExists(programId.getParent())) {
         throw new ApplicationNotFoundException(programId.getParent());
       } else if (!store.programExists(programId)) {
-        throw new ProgramNotFoundException(programId.toId());
+        throw new ProgramNotFoundException(programId);
       } else if (runId != null) {
         ProgramRunId programRunId = programId.run(runId);
         // Check if the program is running and is started by the Workflow
@@ -450,7 +453,7 @@ public class ProgramLifecycleService extends AbstractIdleService {
   public void saveRuntimeArgs(ProgramId programId, Map<String, String> runtimeArgs) throws Exception {
     authorizationEnforcer.enforce(programId, authenticationContext.getPrincipal(), Action.ADMIN);
     if (!store.programExists(programId)) {
-      throw new NotFoundException(programId.toId());
+      throw new NotFoundException(programId);
     }
 
     preferencesStore.setProperties(programId.getNamespace(), programId.getApplication(),

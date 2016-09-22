@@ -41,6 +41,7 @@ import co.cask.cdap.notifications.service.NotificationService;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.ScheduledRuntime;
+import co.cask.cdap.proto.id.ScheduleId;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
@@ -307,7 +308,8 @@ public class StreamSizeScheduler implements Scheduler {
     String scheduleId = AbstractSchedulerService.scheduleIdFor(program, programType, scheduleName);
     StreamSubscriber subscriber = scheduleSubscribers.get(scheduleId);
     if (subscriber == null) {
-      throw new ScheduleNotFoundException(Id.Schedule.from(program.getApplication(), scheduleName));
+      throw new ScheduleNotFoundException(new ScheduleId(program.getNamespaceId(), program.getApplicationId(),
+                                                         scheduleName));
     }
     subscriber.suspendScheduleTask(program, programType, scheduleName);
   }
@@ -318,7 +320,8 @@ public class StreamSizeScheduler implements Scheduler {
     String scheduleId = AbstractSchedulerService.scheduleIdFor(program, programType, scheduleName);
     StreamSubscriber subscriber = scheduleSubscribers.get(scheduleId);
     if (subscriber == null) {
-      throw new ScheduleNotFoundException(Id.Schedule.from(program.getApplication(), scheduleName));
+      throw new ScheduleNotFoundException(new ScheduleId(program.getNamespaceId(), program.getApplicationId(),
+                                                         scheduleName));
     }
     subscriber.resumeScheduleTask(program, programType, scheduleName);
   }
@@ -338,7 +341,8 @@ public class StreamSizeScheduler implements Scheduler {
     StreamSubscriber subscriber = scheduleSubscribers.get(AbstractSchedulerService.scheduleIdFor(program, programType,
                                                                                                  schedule.getName()));
     if (subscriber == null) {
-      throw new ScheduleNotFoundException(Id.Schedule.from(program.getApplication(), schedule.getName()));
+      throw new ScheduleNotFoundException(new ScheduleId(program.getNamespaceId(), program.getApplicationId(),
+                                                         schedule.getName()));
     }
 
     if (!streamSizeSchedule.getStreamName().equals(subscriber.getStreamId().getId())) {
@@ -361,7 +365,8 @@ public class StreamSizeScheduler implements Scheduler {
     String scheduleId = AbstractSchedulerService.scheduleIdFor(programId, programType, scheduleName);
     StreamSubscriber subscriber = scheduleSubscribers.remove(scheduleId);
     if (subscriber == null) {
-      throw new ScheduleNotFoundException(Id.Schedule.from(programId.getApplication(), scheduleName));
+      throw new ScheduleNotFoundException(new ScheduleId(programId.getNamespaceId(), programId.getApplicationId(),
+                                                         scheduleName));
     }
     subscriber.deleteSchedule(programId, programType, scheduleName);
     // We don't delete a StreamSubscriber, even if it has zero task. We keep an empty subscriber so that we don't
@@ -705,7 +710,8 @@ public class StreamSizeScheduler implements Scheduler {
       String scheduleId = AbstractSchedulerService.scheduleIdFor(programId, programType, scheduleName);
       StreamSizeScheduleTask task = scheduleTasks.get(scheduleId);
       if (task == null) {
-        throw new ScheduleNotFoundException(Id.Schedule.from(programId.getApplication(), scheduleName));
+        throw new ScheduleNotFoundException(new ScheduleId(programId.getNamespaceId(), programId.getApplicationId(),
+                                                           scheduleName));
       }
       if (task.suspend()) {
         activeTasks.decrementAndGet();
@@ -722,7 +728,8 @@ public class StreamSizeScheduler implements Scheduler {
       String scheduleId = AbstractSchedulerService.scheduleIdFor(programId, programType, scheduleName);
       task = scheduleTasks.get(scheduleId);
       if (task == null) {
-        throw new ScheduleNotFoundException(Id.Schedule.from(programId.getApplication(), scheduleName));
+        throw new ScheduleNotFoundException(new ScheduleId(programId.getNamespaceId(), programId.getApplicationId(),
+                                                           scheduleName));
       }
       if (!task.resume()) {
         return;
@@ -751,7 +758,7 @@ public class StreamSizeScheduler implements Scheduler {
       String scheduleIdString = AbstractSchedulerService.scheduleIdFor(program, programType, schedule.getName());
       final StreamSizeScheduleTask scheduleTask = scheduleTasks.get(scheduleIdString);
       if (scheduleTask == null) {
-        throw new ScheduleNotFoundException(scheduleId);
+        throw new ScheduleNotFoundException(scheduleId.toEntityId());
       }
       scheduleTask.updateSchedule(schedule);
 
@@ -774,7 +781,7 @@ public class StreamSizeScheduler implements Scheduler {
       Id.Schedule scheduleId = Id.Schedule.from(programId.getApplication(), scheduleName);
       StreamSizeScheduleTask scheduleTask = scheduleTasks.get(scheduleIdString);
       if (scheduleTask == null) {
-        throw new ScheduleNotFoundException(scheduleId);
+        throw new ScheduleNotFoundException(scheduleId.toEntityId());
       }
       scheduleTask.deleteFromStore();
 

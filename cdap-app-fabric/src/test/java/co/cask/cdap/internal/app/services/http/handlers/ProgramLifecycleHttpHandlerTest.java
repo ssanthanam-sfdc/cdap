@@ -51,6 +51,7 @@ import co.cask.cdap.proto.RunRecord;
 import co.cask.cdap.proto.ServiceInstances;
 import co.cask.cdap.proto.codec.ScheduleSpecificationCodec;
 import co.cask.cdap.proto.codec.WorkflowActionSpecificationCodec;
+import co.cask.cdap.proto.id.ApplicationId;
 import co.cask.cdap.proto.id.ProgramId;
 import co.cask.cdap.test.SlowTests;
 import co.cask.cdap.test.XSlowTests;
@@ -423,17 +424,17 @@ public class ProgramLifecycleHttpHandlerTest extends AppFabricTestBase {
     // Test missing app, programType, etc
     List<JsonObject> returnedBody = readResponse(doPost(statusUrl1, "[{'appId':'NotExist', 'programType':'Flow', " +
       "'programId':'WordCountFlow'}]"), LIST_OF_JSONOBJECT_TYPE);
-    Assert.assertEquals(new NotFoundException(Id.Application.from("testnamespace1", "NotExist")).getMessage(),
+    Assert.assertEquals(new NotFoundException(new ApplicationId("testnamespace1", "NotExist")).getMessage(),
                         returnedBody.get(0).get("error").getAsString());
     returnedBody = readResponse(
       doPost(statusUrl1, "[{'appId':'WordCountApp', 'programType':'flow', 'programId':'NotExist'}," +
         "{'appId':'WordCountApp', 'programType':'flow', 'programId':'WordCountFlow'}]"), LIST_OF_JSONOBJECT_TYPE);
-    Assert.assertEquals(new NotFoundException(Id.Program.from("testnamespace1", "WordCountApp", ProgramType.FLOW,
-                                                              "NotExist")).getMessage(),
+    Assert.assertEquals(new NotFoundException(new ProgramId("testnamespace1", "WordCountApp", ProgramType.FLOW,
+                                                            "NotExist")).getMessage(),
                         returnedBody.get(0).get("error").getAsString());
     Assert.assertEquals(
       new NotFoundException(
-        Id.Program.from("testnamespace1", "WordCountApp", ProgramType.FLOW, "NotExist")).getMessage(),
+        new ProgramId("testnamespace1", "WordCountApp", ProgramType.FLOW, "NotExist")).getMessage(),
       returnedBody.get(0).get("error").getAsString());
     // The programType should be consistent. Second object should have proper status
     Assert.assertEquals("Flow", returnedBody.get(1).get("programType").getAsString());
@@ -490,11 +491,11 @@ public class ProgramLifecycleHttpHandlerTest extends AppFabricTestBase {
       "{'appId': 'WordCountApp', 'programType': 'Service', 'programId': 'WordFrequencyService'}," +
       "{'appId': 'WordCountApp', 'programType': 'Mapreduce', 'programId': 'VoidMapReduceJob'}]");
     returnedBody = readResponse(response, LIST_OF_JSONOBJECT_TYPE);
-    Assert.assertEquals(new NotFoundException(Id.Application.from("testnamespace2", "WordCountApp")).getMessage(),
+    Assert.assertEquals(new NotFoundException(new ApplicationId("testnamespace2", "WordCountApp")).getMessage(),
                         returnedBody.get(0).get("error").getAsString());
-    Assert.assertEquals(new NotFoundException(Id.Application.from("testnamespace2", "WordCountApp")).getMessage(),
+    Assert.assertEquals(new NotFoundException(new ApplicationId("testnamespace2", "WordCountApp")).getMessage(),
                         returnedBody.get(1).get("error").getAsString());
-    Assert.assertEquals(new NotFoundException(Id.Application.from("testnamespace2", "WordCountApp")).getMessage(),
+    Assert.assertEquals(new NotFoundException(new ApplicationId("testnamespace2", "WordCountApp")).getMessage(),
                         returnedBody.get(2).get("error").getAsString());
   }
 

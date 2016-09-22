@@ -42,7 +42,7 @@ public abstract class AbstractNamespaceClient extends AbstractNamespaceQueryClie
     HttpResponse response = execute(HttpRequest.delete(url).build());
 
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new NamespaceNotFoundException(namespaceId);
+      throw new NamespaceNotFoundException(namespaceId.toEntityId());
     } else if (HttpURLConnection.HTTP_FORBIDDEN == response.getResponseCode()) {
       throw new NamespaceCannotBeDeletedException(namespaceId, response.getResponseBodyAsString());
     } else if (response.getResponseCode() == HttpURLConnection.HTTP_OK) {
@@ -54,13 +54,12 @@ public abstract class AbstractNamespaceClient extends AbstractNamespaceQueryClie
 
   @Override
   public void create(NamespaceMeta metadata) throws Exception {
-    Id.Namespace namespace = Id.Namespace.from(metadata.getName());
-    URL url = resolve(String.format("namespaces/%s", namespace.getId()));
+    URL url = resolve(String.format("namespaces/%s", metadata.getName()));
     HttpResponse response = execute(HttpRequest.put(url).withBody(GSON.toJson(metadata)).build());
     String responseBody = response.getResponseBodyAsString();
     if (response.getResponseCode() == HttpURLConnection.HTTP_OK) {
       if (responseBody.equals(String.format("Namespace '%s' already exists.", metadata.getName()))) {
-        throw new NamespaceAlreadyExistsException(namespace);
+        throw new NamespaceAlreadyExistsException(metadata.getNamespaceId());
       }
       return;
     }
@@ -90,7 +89,7 @@ public abstract class AbstractNamespaceClient extends AbstractNamespaceQueryClie
     HttpResponse response = execute(HttpRequest.delete(url).build());
 
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new NamespaceNotFoundException(namespaceId);
+      throw new NamespaceNotFoundException(namespaceId.toEntityId());
     } else if (HttpURLConnection.HTTP_FORBIDDEN == response.getResponseCode()) {
       String msg = String.format("Datasets in the namespace '%s' cannot be deleted. Reason: '%s'.", namespaceId,
                                  response.getResponseBodyAsString());

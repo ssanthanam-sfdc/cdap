@@ -28,6 +28,7 @@ import co.cask.cdap.internal.schedule.TimeSchedule;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.ScheduledRuntime;
+import co.cask.cdap.proto.id.ScheduleId;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
@@ -489,7 +490,8 @@ final class TimeScheduler implements Scheduler {
                              String scheduleName) throws org.quartz.SchedulerException, ScheduleNotFoundException {
     Trigger trigger = scheduler.getTrigger(getGroupedTriggerKey(program, programType, scheduleName));
     if (trigger == null) {
-      throw new ScheduleNotFoundException(Id.Schedule.from(program.getApplication(), scheduleName));
+      throw new ScheduleNotFoundException(new ScheduleId(program.getNamespaceId(), program.getApplicationId(),
+                                                         scheduleName));
     }
     return  trigger;
   }

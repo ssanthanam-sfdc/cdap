@@ -127,7 +127,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(request.build(), config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new ProgramNotFoundException(program);
+      throw new ProgramNotFoundException(program.toEntityId());
     }
   }
 
@@ -195,7 +195,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(HttpMethod.POST, url, config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new ProgramNotFoundException(program);
+      throw new ProgramNotFoundException(program.toEntityId());
     }
   }
 
@@ -269,7 +269,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (HttpURLConnection.HTTP_NOT_FOUND == response.getResponseCode()) {
-      throw new ProgramNotFoundException(program);
+      throw new ProgramNotFoundException(program.toEntityId());
     }
 
     Map<String, String> responseObject
@@ -345,7 +345,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new ProgramNotFoundException(program);
+      throw new ProgramNotFoundException(program.toEntityId());
     }
 
     return ObjectResponse.fromJsonBody(response, DistributedProgramLiveInfo.class).getResponseObject();
@@ -371,7 +371,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new NotFoundException(flowlet);
+      throw new NotFoundException(flowlet.toEntityId());
     }
 
     return ObjectResponse.fromJsonBody(response, Instances.class).getResponseObject().getInstances();
@@ -398,7 +398,7 @@ public class ProgramClient {
 
     HttpResponse response = restClient.execute(request, config.getAccessToken(), HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new NotFoundException(flowlet);
+      throw new NotFoundException(flowlet.toEntityId());
     }
   }
 
@@ -419,7 +419,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new NotFoundException(worker);
+      throw new NotFoundException(worker.toEntityId());
     }
     return ObjectResponse.fromJsonBody(response, Instances.class).getResponseObject().getInstances();
   }
@@ -442,7 +442,7 @@ public class ProgramClient {
 
     HttpResponse response = restClient.execute(request, config.getAccessToken(), HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new NotFoundException(worker);
+      throw new NotFoundException(worker.toEntityId());
     }
   }
 
@@ -464,7 +464,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new NotFoundException(service);
+      throw new NotFoundException(service.toEntityId());
     }
     return ObjectResponse.fromJsonBody(response, Instances.class).getResponseObject().getInstances();
   }
@@ -488,7 +488,7 @@ public class ProgramClient {
     HttpRequest request = HttpRequest.put(url).withBody(GSON.toJson(new Instances(instances))).build();
     HttpResponse response = restClient.execute(request, config.getAccessToken(), HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new NotFoundException(service);
+      throw new NotFoundException(service.toEntityId());
     }
   }
 
@@ -510,8 +510,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      Id.Program program = Id.Program.from(appId, ProgramType.WORKFLOW, workflowId);
-      throw new NotFoundException(new Id.Run(program, runId));
+      throw new NotFoundException(appId.toEntityId().workflow(workflowId).run(runId));
     }
 
     ObjectResponse<List<WorkflowActionNode>> objectResponse = ObjectResponse.fromJsonBody(
@@ -549,7 +548,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new NotFoundException(program);
+      throw new NotFoundException(program.toEntityId());
     }
 
     return ObjectResponse.fromJsonBody(response, new TypeToken<List<RunRecord>>() { }).getResponseObject();
@@ -590,7 +589,7 @@ public class ProgramClient {
     URL url = config.resolveNamespacedURLV3(program.getNamespace(), path);
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken());
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new ProgramNotFoundException(program);
+      throw new ProgramNotFoundException(program.toEntityId());
     }
 
     return new String(response.getResponseBody(), Charsets.UTF_8);
@@ -614,7 +613,7 @@ public class ProgramClient {
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken(),
                                                HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new ProgramNotFoundException(program);
+      throw new ProgramNotFoundException(program.toEntityId());
     }
     return ObjectResponse.fromJsonBody(response, new TypeToken<Map<String, String>>() { }).getResponseObject();
   }
@@ -637,7 +636,7 @@ public class ProgramClient {
     HttpRequest request = HttpRequest.put(url).withBody(GSON.toJson(runtimeArgs)).build();
     HttpResponse response = restClient.execute(request, config.getAccessToken(), HttpURLConnection.HTTP_NOT_FOUND);
     if (response.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) {
-      throw new ProgramNotFoundException(program);
+      throw new ProgramNotFoundException(program.toEntityId());
     }
   }
 }
