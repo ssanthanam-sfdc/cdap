@@ -183,15 +183,29 @@ public abstract class AbstractHttpHandlerDelegator<T extends HttpServiceHandler>
                                             final ClassLoader programContextClassLoader,
                                             final HttpServiceContext serviceContext) {
     return new Transactional() {
+
       @Override
       public void execute(final TxRunnable runnable) throws TransactionFailureException {
+        executeInternal(null, runnable);
+      }
+
+      @Override
+      public void execute(int timeoutInSeconds, TxRunnable runnable) throws TransactionFailureException {
+        executeInternal(timeoutInSeconds, runnable);
+      }
+
+      private void executeInternal(Integer timeout, final TxRunnable runnable) throws TransactionFailureException {
         // This method maybe called from user code, hence the context classloader maybe the
         // program context classloader (or whatever the user set to).
         // We need to switch the classloader back to CDAP system classloader before calling txExecute
         // since it starting of transaction should happens in CDAP system context, not program context
         ClassLoader callerClassLoader = ClassLoaders.setContextClassLoader(getClass().getClassLoader());
         try {
-          txContext.start();
+          if (null == timeout) {
+            txContext.start();
+          } else {
+            txContext.start(timeout);
+          }
           try {
             ClassLoader oldClassLoader = ClassLoaders.setContextClassLoader(programContextClassLoader);
             try {

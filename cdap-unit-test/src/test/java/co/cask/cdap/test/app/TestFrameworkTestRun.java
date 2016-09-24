@@ -78,6 +78,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
+import org.apache.tephra.TxConstants;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -118,7 +119,8 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
   private static final Logger LOG = LoggerFactory.getLogger(TestFrameworkTestRun.class);
 
   @ClassRule
-  public static final TestConfiguration CONFIG = new TestConfiguration("explore.enabled", false);
+  public static final TestConfiguration CONFIG = new TestConfiguration("explore.enabled", false,
+                                                                       TxConstants.Manager.CFG_TX_CLEANUP_INTERVAL, 1);
 
   @ClassRule
   public static final TemporaryFolder TEMP_FOLDER = new TemporaryFolder();
@@ -1142,13 +1144,29 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     }, 10, TimeUnit.SECONDS, 100, TimeUnit.MILLISECONDS);
   }
 
+  @Category(SlowTests.class)
+  @Test
+  public void testWorkerWithTxTimeout() throws Exception {
+    ApplicationManager applicationManager = deployApplication(testSpace, AppWithWorker.class);
+    try {
+      WorkerManager manager = applicationManager.getWorkerManager(AppWithWorker.TIMED_WORKER).start();
+      manager.waitForFinish(10L, TimeUnit.SECONDS);
+      List<RunRecord> history = manager.getHistory();
+      Assert.assertEquals(1, history.size());
+      RunRecord record = history.get(0);
+      Assert.assertEquals(ProgramRunStatus.COMPLETED, record.getStatus());
+    } finally {
+      applicationManager.stopAll();
+    }
+  }
+
   @Test
   public void testWorkerStop() throws Exception {
     // Test to make sure the worker program's status goes to stopped after the run method finishes
     ApplicationManager manager = deployApplication(NoOpWorkerApp.class);
     WorkerManager workerManager = manager.getWorkerManager("NoOpWorker");
     workerManager.start();
-    workerManager.waitForStatus(false, 5, 1);
+    workerManager.waitForStatus(false, 30, 1);
   }
 
   @Category(SlowTests.class)

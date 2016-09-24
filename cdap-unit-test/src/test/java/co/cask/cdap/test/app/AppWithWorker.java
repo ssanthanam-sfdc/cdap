@@ -16,6 +16,7 @@
 
 package co.cask.cdap.test.app;
 
+import co.cask.cdap.TimedTransactions;
 import co.cask.cdap.api.TxRunnable;
 import co.cask.cdap.api.app.AbstractApplication;
 import co.cask.cdap.api.data.DatasetContext;
@@ -33,6 +34,7 @@ public class AppWithWorker extends AbstractApplication {
 
   public static final String NAME = "AppWithWorker";
   public static final String WORKER = "TableWriter";
+  public static final String TIMED_WORKER = "TimedWorker";
   public static final String DATASET = "MyKVTable";
   public static final String INITIALIZE = "initialize";
   public static final String RUN = "run";
@@ -42,6 +44,7 @@ public class AppWithWorker extends AbstractApplication {
   public void configure() {
     setName(NAME);
     addWorker(new TableWriter());
+    addWorker(new TimedWorker());
   }
 
   private static class TableWriter extends AbstractWorker {
@@ -89,6 +92,13 @@ public class AppWithWorker extends AbstractApplication {
           table.write(key, value);
         }
       });
+    }
+  }
+
+  private static class TimedWorker extends AbstractWorker {
+    @Override
+    public void run() {
+      TimedTransactions.testTimedTransactions(getContext());
     }
   }
 }
