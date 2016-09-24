@@ -32,7 +32,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;
-import com.google.common.collect.Sets;
 import org.apache.twill.filesystem.Location;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +50,8 @@ import java.util.concurrent.Callable;
  */
 public final class LogCleanup implements Runnable {
   private static final Logger LOG = LoggerFactory.getLogger(LogCleanup.class);
+  private static final int MAX_DISK_FILES_SCANNED = 50000;
+  private static final int MAX_META_FILES_SCANNED = 100;
 
   private final FileMetaDataManager fileMetaDataManager;
   private final RootLocationFactory rootLocationFactory;
@@ -100,7 +101,11 @@ public final class LogCleanup implements Runnable {
                                         });
 
       // clean log files which does not have corresponding meta data
-      cleanFilesWithoutMeta(tillTime, namespacedLogBaseDirMap, parentDirs);
+      try {
+        cleanFilesWithoutMeta(tillTime, namespacedLogBaseDirMap, parentDirs);
+      } catch (Exception e) {
+        LOG.error("Got exception while cleaning up disk files without meta data", e);
+      }
 
       // Delete any empty parent dirs
       for (final String namespacedLogBaseDir : parentDirs.keySet()) {
@@ -142,51 +147,14 @@ public final class LogCleanup implements Runnable {
                                                                                               impersonator);
       // processor to get list of log files older than retention duration
       final Processor<LocationStatus, Set<Location>> diskFilesProcessor = getDiskFilesProcessor(namespaceId, tillTime);
-      // gather all the disk log files older than tillTime for a given namespace
       if (namespacedLogBaseDir.exists()) {
-        try {
-          impersonator.doAs(namespaceId, new Callable<Void>() {
-            @Override
-            public Void call() throws Exception {
-              Locations.processLocations(namespacedLogBaseDir, true, diskFilesProcessor);
-              return null;
-            }
-          });
-        } catch (Exception e) {
-          LOG.warn("Got exception while accessing path {}", namespacedLogBaseDir, e);
-        }
-        Set<Location> diskFileLocations = diskFilesProcessor.getResult();
+        // Get all the disk log files on disk for a given namespace
+        Set<Location> diskFileLocations = getDiskLocations(namespaceId, namespacedLogBaseDir, diskFilesProcessor);
+        // remove log files from diskFileLocations for which metadata is present.
+        removeLocationsWithMeta(tillTime, namespaceId, diskFileLocations);
 
-        // get the logging context for a given namespace
-        LoggingContext loggingContext = new LogNamespaceLoggingContext(namespaceId.getNamespace());
-
-        // get all the log meta files for a given namespace
-        FileMetaDataManager.TableKey nextTableKey = new FileMetaDataManager.TableKey(loggingContext.getLogPartition(),
-                                                                                     null);
-        Processor<URI, Set<URI>> metaProcessor = getMetaFilesProcessor();
-        // Get all the log metadata in batches of 100
-        do {
-          nextTableKey = fileMetaDataManager.scanFiles(nextTableKey, 100, metaProcessor);
-        } while (nextTableKey != null);
-
-        // create location from scanned uris and keep track of all the metadata files modified before tillTime
-        final Set<Location> metaLocations = new HashSet<>();
-        for (final URI uri : metaProcessor.getResult()) {
-          impersonator.doAs(namespaceId, new Callable<Void>() {
-            @Override
-            public Void call() throws Exception {
-              Location fileLocation = rootLocationFactory.create(uri);
-              if (fileLocation.lastModified() < tillTime) {
-                metaLocations.add(fileLocation);
-              }
-              return null;
-            }
-          });
-        }
-
-        Sets.SetView<Location> difference = Sets.difference(diskFileLocations, metaLocations);
         // delete all the disk locations for which metadata is not present
-        for (final Location locationToDelete : difference) {
+        for (final Location locationToDelete : diskFileLocations) {
           try {
             deleteLogFiles(parentDirs, namespaceId, namespacedLogBaseDir.toString(), locationToDelete);
           } catch (Exception e) {
@@ -196,6 +164,65 @@ public final class LogCleanup implements Runnable {
         }
       }
     }
+  }
+
+  /**
+   * Remove all the disk files from diskFileLocations for which meta data is present
+   * @param tillTime time till the meta data will be deleted.
+   * @param namespaceId namespace for which metadata needs to be scanned
+   * @param diskFileLocations log files present on disk for given namespace
+   */
+  private void removeLocationsWithMeta(final long tillTime, NamespaceId namespaceId,
+                                       final Set<Location> diskFileLocations) {
+    // get the logging context for a given namespace
+    LoggingContext loggingContext = new LogNamespaceLoggingContext(namespaceId.getNamespace());
+    FileMetaDataManager.TableKey nextTableKey = new FileMetaDataManager.TableKey(loggingContext.getLogPartition(),
+                                                                                 null);
+    Processor<URI, Set<URI>> metaProcessor = getMetaFilesProcessor();
+    // Get all the log metadata in batches of 100
+    do {
+      nextTableKey = fileMetaDataManager.scanFiles(nextTableKey, MAX_META_FILES_SCANNED, metaProcessor);
+      // create location from scanned uris and remove all the metadata files modified before tillTime
+      for (final URI uri : metaProcessor.getResult()) {
+        try {
+          impersonator.doAs(namespaceId, new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+              Location fileLocation = rootLocationFactory.create(uri);
+              if (fileLocation.lastModified() < tillTime && diskFileLocations.contains(fileLocation)) {
+                diskFileLocations.remove(fileLocation);
+              }
+              return null;
+            }
+          });
+        } catch (Exception e) {
+          LOG.warn("Got exception while accessing path {}", uri.toString(), e);
+        }
+      }
+    } while (nextTableKey != null);
+  }
+
+  /**
+   *
+   * @param namespaceId namespace for which metadata needs to be scanned
+   * @param namespacedLogBaseDir namespaced log base dir without the root dir prefixed
+   * @param diskFilesProcessor processor for disk files
+   * @return set of locations on disk
+   */
+  private Set<Location> getDiskLocations(NamespaceId namespaceId, final Location namespacedLogBaseDir,
+                                         final Processor<LocationStatus, Set<Location>> diskFilesProcessor) {
+    try {
+      impersonator.doAs(namespaceId, new Callable<Void>() {
+        @Override
+        public Void call() throws Exception {
+          Locations.processLocations(namespacedLogBaseDir, true, diskFilesProcessor);
+          return null;
+        }
+      });
+    } catch (Exception e) {
+      LOG.warn("Got exception while accessing path {}", namespacedLogBaseDir, e);
+    }
+    return diskFilesProcessor.getResult();
   }
 
   private Processor<URI, Set<URI>> getMetaFilesProcessor() {
@@ -233,6 +260,7 @@ public final class LogCleanup implements Runnable {
                                                                          final long tillTime) {
     return new Processor<LocationStatus, Set<Location>>() {
       private Set<Location> locations = new HashSet<>();
+      private int count = 0;
 
       @Override
       public boolean process(final LocationStatus input) {
@@ -243,10 +271,11 @@ public final class LogCleanup implements Runnable {
               return rootLocationFactory.create(input.getUri());
             }
           });
-          if (!input.isDir() && location.lastModified() < tillTime) {
+          // For each namespace, only scan MAX_DISK_FILES_SCANNED disk files per clean up run
+          if (!input.isDir() && location.lastModified() < tillTime && count < MAX_DISK_FILES_SCANNED) {
+            count++;
             locations.add(location);
           }
-
         } catch (Exception e) {
           LOG.error("Got error in getting last modified location for log file {} during log clean up");
         }
