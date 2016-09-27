@@ -216,6 +216,12 @@ public class UnitTestManager implements TestManager {
   }
 
   @Override
+  public ApplicationManager deployApplication(ApplicationId appId, AppRequest appRequest) throws Exception {
+    appFabricClient.deployApplication(appId, appRequest);
+    return appManagerFactory.create(appId);
+  }
+
+  @Override
   public ApplicationManager getApplicationManager(ApplicationId applicationId) {
     return appManagerFactory.create(applicationId.toId());
   }

@@ -114,10 +114,10 @@ public class ZKRouteStore implements RouteStore {
     if (future == null) {
       future = getAndWatchData(serviceId, settableFuture, new ZKRouteWatcher(serviceId));
     }
-    return getConfig(serviceId, future);
+    return getConfig(future);
   }
 
-  private RouteConfig getConfig(ProgramId serviceId, Future<RouteConfig> future) {
+  private RouteConfig getConfig(Future<RouteConfig> future) {
     try {
       return future.get(ZK_TIMEOUT_SECS, TimeUnit.SECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {

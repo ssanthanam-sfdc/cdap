@@ -406,16 +406,25 @@ public class AppFabricClient {
   }
 
   public void deployApplication(Id.Application appId, AppRequest appRequest) throws Exception {
-
     DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.PUT,
       String.format("%s/apps/%s", getNamespacePath(appId.getNamespaceId()), appId.getId()));
+    createApplication(appId.toEntityId(), request, appRequest);
+  }
+
+  public void deployApplication(ApplicationId appId, AppRequest appRequest) throws Exception {
+    DefaultHttpRequest requst = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
+      String.format("%s/apps/%s/versions/%s/create", getNamespacePath(appId.getNamespace()),
+                    appId.getApplication(), appId.getVersion()));
+    createApplication(appId, requst, appRequest);
+  }
+
+  private void createApplication(ApplicationId appId, DefaultHttpRequest request, AppRequest appRequest) throws Exception {
     request.setHeader(Constants.Gateway.API_KEY, "api-key-example");
     request.setContent(ChannelBuffers.wrappedBuffer(Bytes.toBytes(GSON.toJson(appRequest.getConfig()))));
 
     MockResponder mockResponder = new MockResponder();
-
     BodyConsumer bodyConsumer = appLifecycleHttpHandler.create(request, mockResponder,
-                                                               appId.getNamespaceId(), appId.getId());
+                                                               appId.getNamespace(), appId.getApplication());
     Preconditions.checkNotNull(bodyConsumer, "BodyConsumer from deploy call should not be null");
 
     byte[] contents = Bytes.toBytes(GSON.toJson(appRequest));
