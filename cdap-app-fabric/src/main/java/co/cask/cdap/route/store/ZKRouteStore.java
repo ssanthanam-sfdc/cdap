@@ -38,6 +38,7 @@ import org.apache.twill.zookeeper.ZKClient;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,10 +115,10 @@ public class ZKRouteStore implements RouteStore {
     if (future == null) {
       future = getAndWatchData(serviceId, settableFuture, new ZKRouteWatcher(serviceId));
     }
-    return getConfig(serviceId, future);
+    return getConfig(future);
   }
 
-  private RouteConfig getConfig(ProgramId serviceId, Future<RouteConfig> future) {
+  private RouteConfig getConfig(Future<RouteConfig> future) {
     try {
       return future.get(ZK_TIMEOUT_SECS, TimeUnit.SECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
@@ -154,11 +155,46 @@ public class ZKRouteStore implements RouteStore {
 
       @Override
       public void onFailure(Throwable t) {
-        routeConfigMap.remove(serviceId);
         settableFuture.setException(t);
+        // If no node is present, then simply place a watch on the node to monitor further data updates
+        // If its an exception other than NoNodeException, then remove the future, so that zkClient#getData
+        // will be retried during the next fetch config request
+        if (t instanceof KeeperException.NoNodeException) {
+          existsAndWatch(serviceId);
+        } else {
+          routeConfigMap.remove(serviceId);
+        }
       }
     });
     return settableFuture;
+  }
+
+  private void existsAndWatch(final ProgramId serviceId) {
+    Futures.addCallback(zkClient.exists(getZKPath(serviceId), new Watcher() {
+      @Override
+      public void process(WatchedEvent event) {
+        // If service name doesn't exist in the map, then don't rewatch it.
+        if (!routeConfigMap.containsKey(serviceId)) {
+          return;
+        }
+
+        if (event.getType() == Event.EventType.NodeCreated) {
+          getAndWatchData(serviceId, SettableFuture.<RouteConfig>create(), new ZKRouteWatcher(serviceId));
+        }
+      }
+    }), new FutureCallback<Stat>() {
+      @Override
+      public void onSuccess(Stat result) {
+        if (result != null) {
+          getAndWatchData(serviceId, SettableFuture.<RouteConfig>create(), new ZKRouteWatcher(serviceId));
+        }
+      }
+
+      @Override
+      public void onFailure(Throwable t) {
+        LOG.error("Failed to check exists for property data for {}", serviceId, t);
+      }
+    });
   }
 
   @Override
